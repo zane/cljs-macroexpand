@@ -21,10 +21,7 @@
 
   (defn expand
     [env form]
-    (println \"in function\")
-    (let [expanded (ana/macroexpand-1 env form)]
-      (println expanded)
-      expanded))
+    (ana/macroexpand-1 env form))
 ")
 
 (def macro-source "
@@ -84,7 +81,7 @@
     (cljs/eval-str #_(cljs/empty-state)
                    state
                    s
-                   println)))
+                   identity)))
 
 (defn -main
   [& _]
