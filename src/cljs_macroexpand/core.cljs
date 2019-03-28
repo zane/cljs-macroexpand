@@ -1,7 +1,11 @@
 (ns cljs-macroexpand.core
   (:require-macros [cljs-macroexpand.state :as state])
-  (:require [cljs.analyzer]
+  (:require [cljs.analyzer :as ana]
+            [cljs.env :as env]
             [cljs.js :as cljs]))
+
+#_(def st (state/compiler-state))
+#_(set! *print-length* 100)
 
 (def value-source "
   (ns cljs-macroexpand.value)
@@ -30,26 +34,18 @@
 
   (defmacro our-expand
     [form]
-    (pr-str (fun/expand &env form)))
+    (fun/expand &env form))
 ")
-
-(def state (cljs.js/empty-state))
-
-(defn load-library-analysis-cache! []
-  (cljs/load-analysis-cache! state 'cljs.analyzer (state/analyzer-state 'cljs.analyzer))
-  nil)
 
 (defn set-loaded!
   [ns]
   (swap! cljs/*loaded* conj ns))
 
-(defn deps
-  [sym]
-  (condp = sym
-    'cljs-macroexpand.value       value-source
-    'cljs-macroexpand.value-macro value-macro-source
-    'cljs-macroexpand.fun         fun-source
-    'cljs-macroexpand.macro       macro-source))
+(def deps
+  {'cljs-macroexpand.value       value-source
+   'cljs-macroexpand.value-macro value-macro-source
+   'cljs-macroexpand.fun         fun-source
+   'cljs-macroexpand.macro       macro-source})
 
 (def test-inc "(inc 0)")
 (def test-value "(ns cljs-macroexpand.test-value
@@ -60,30 +56,26 @@
                        (println (value/value-macro))")
 (def test-macro "(ns cljs-macroexpand.test-macro
                    (:require-macros [cljs-macroexpand.macro :as macro]))
-                 (println (macro/our-expand (let [x inc] (x 0))))")
+                 (macro/our-expand `(let [x inc] (x 0)))")
 
 (defn load
   "https://cljs.github.io/api/cljs.js/STARload-fnSTAR"
   [{:keys [name macros path] :as opts} cb]
   (print "Loading dependency: ")
   (prn opts)
-  (cb {:lang :clj, :source (deps name)}))
-
-
-#_(load-library-analysis-cache!)
-#_(set-loaded! 'cljs.analyzer)
+  (cb (if (contains? #{'cljs.analyzer} name)
+        {:lang :clj, :source ""}
+        (when-let [source (deps name)]
+          {:lang :clj, :source source}))))
 
 (defn eval-str
   [s]
-
-  (binding [cljs/*eval-fn* cljs/js-eval
-            cljs/*load-fn* load]
-    (cljs/eval-str #_(cljs/empty-state)
-                   state
-                   s
-                   identity)))
+  (let [state (cljs/empty-state)]
+    (binding [cljs/*eval-fn* cljs/js-eval
+              cljs/*load-fn* load]
+      (cljs/eval-str state s println))))
 
 (defn -main
   [& _]
-  (set-loaded! 'cljs.analyzer)
-  (eval-str test-macro))
+  #_(set-loaded! 'cljs.analyzer)
+  (println (eval-str test-macro)))
